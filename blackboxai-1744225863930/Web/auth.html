@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Required</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        .bg-gradient-animated {
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+        
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        #qr-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .scan-region {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5); }
+            50% { box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.3); }
+            100% { box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-animated min-h-screen font-['Lato'] text-white">
+    <div class="container mx-auto px-4 py-16">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl md:text-6xl font-['Playfair_Display'] font-bold mb-4">Authentication Required</h1>
+            <p class="text-xl opacity-80">Please scan the QR code to access the gallery</p>
+        </div>
+
+        <div class="max-w-2xl mx-auto bg-white/10 backdrop-blur-sm rounded-lg p-8">
+            <div class="text-center mb-8">
+                <div id="video-container" class="mb-8 rounded-lg overflow-hidden hidden">
+                    <video id="video" class="w-full"></video>
+                    <canvas id="qr-canvas" class="hidden"></canvas>
+                    <div class="scan-region"></div>
+                </div>
+
+                <div class="text-center mb-8">
+                    <p id="status-message" class="text-lg mb-4">Camera access not available</p>
+                    <button id="toggle-camera" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-full transition-colors mb-8">
+                        <i class="fas fa-camera mr-2"></i> Try Camera
+                    </button>
+                </div>
+
+                <div class="text-center">
+                    <p class="text-lg mb-4">Or enter the access code:</p>
+                    <input type="password" id="access-code" placeholder="Enter access code" 
+                        class="bg-white/10 text-white placeholder-white/50 px-6 py-3 rounded-full mb-4 w-full max-w-sm text-center focus:outline-none focus:ring-2 focus:ring-white/30">
+                    <button id="submit-code" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-full transition-colors w-full max-w-sm">
+                        <i class="fas fa-key mr-2"></i> Submit
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-8">
+            <a href="index.html" class="inline-block text-white/80 hover:text-white">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Welcome Page
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('qr-canvas');
+        const context = canvas.getContext('2d');
+        const statusMessage = document.getElementById('status-message');
+        const toggleButton = document.getElementById('toggle-camera');
+        const accessCodeInput = document.getElementById('access-code');
+        const submitButton = document.getElementById('submit-code');
+        const videoContainer = document.getElementById('video-container');
+        let scanning = false;
+
+        // The access code that will grant access (in a real app, this would be more secure)
+        const validAccessCode = 'GALLERY-ACCESS-2025';
+
+        // Handle manual code submission
+        submitButton.addEventListener('click', () => {
+            const code = accessCodeInput.value.trim();
+            if (code === validAccessCode) {
+                grantAccess();
+            } else {
+                statusMessage.textContent = 'Invalid access code. Please try again.';
+                accessCodeInput.value = '';
+            }
+        });
+
+        // Handle Enter key in input field
+        accessCodeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitButton.click();
+            }
+        });
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                videoContainer.classList.remove('hidden');
+                video.srcObject = stream;
+                video.play();
+                scanning = true;
+                scan();
+                statusMessage.textContent = 'Scanning for QR code...';
+            } catch (err) {
+                statusMessage.textContent = 'Error accessing camera: ' + err.message;
+            }
+        }
+
+        function stopCamera() {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                scanning = false;
+                videoContainer.classList.add('hidden');
+                statusMessage.textContent = 'Camera stopped';
+            }
+        }
+
+        toggleButton.addEventListener('click', () => {
+            if (scanning) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        });
+
+        video.addEventListener('loadedmetadata', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+        });
+
+        function scan() {
+            if (!scanning) return;
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    if (code.data === validAccessCode) {
+                        grantAccess();
+                    } else {
+                        statusMessage.textContent = 'Invalid QR code. Please try again.';
+                    }
+                }
+            }
+            
+            if (scanning) {
+                requestAnimationFrame(scan);
+            }
+        }
+
+        function grantAccess() {
+            statusMessage.textContent = 'Access granted! Redirecting...';
+            if (scanning) {
+                stopCamera();
+            }
+            // Store authentication in session storage
+            sessionStorage.setItem('galleryAuthenticated', 'true');
+            // Redirect to gallery after a brief delay
+            setTimeout(() => {
+                window.location.href = 'gallery.html';
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
